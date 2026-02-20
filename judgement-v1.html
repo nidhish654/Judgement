@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Judgement</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            text-align: center;
+            transition: 0.3s;
+        }
+
+        /* LIGHT MODE */
+        body.light {
+            background: #f2f2f2;
+            color: #111;
+        }
+
+        /* TITLE */
+        h1 {
+            letter-spacing: 2px;
+            margin-top: 20px;
+        }
+
+        /* THEME TOGGLE */
+        .theme-toggle {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+        }
+
+        /* CARDS */
+        .card {
+            background: #1c1c1c;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+        }
+
+        body.light .card {
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ROUND CARD */
+        .round-card {
+            background: #181818;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 15px auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+            width:80%;            /* full width on small screens */
+            max-width:450px;
+        }
+
+        body.light .round-card {
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* PLAYER BLOCK */
+        .player-block {
+            background: #222;
+            padding: 12px;
+            border-radius: 10px;
+            margin: 12px 0;
+        }
+
+        body.light .player-block {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+
+        /* INPUTS */
+        input[type="number"],
+        input[type="text"] {
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            margin: 6px 0;
+            font-size: 16px;
+            background: #333;
+            color: white;
+        }
+
+        body.light input[type="number"],
+        body.light input[type="text"] {
+            background: white;
+            color: #111;
+            border: 1px solid #ccc;
+        }
+
+        /* RADIO BUTTON AREA */
+        .outcome {
+            margin-top: 8px;
+            display: none;
+        }
+
+        /* BUTTONS */
+        button {
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            margin: 8px 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #c0392b;
+            color: white;
+        }
+
+        button:disabled {
+            background: gray;
+        }
+
+        body.light button {
+            background: #e74c3c;
+            color: white;
+        }
+
+        body.light button:hover {
+            background: #c0392b;
+        }
+
+        /* SUITS */
+        .suit {
+            font-size: 22px;
+            margin-left: 6px;
+        }
+
+        /* LEADERBOARD POPUP */
+        .leaderboard-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .leaderboard-card {
+            background: #1c1c1c;
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        body.light .leaderboard-popup {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        body.light .leaderboard-card {
+            background: white;
+            color: black;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* MEDALS */
+        .medal {
+            font-size: 22px;
+            margin: 12px 0;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <h1>Judgement</h1>
+    <label class="theme-toggle">
+        <input type="checkbox" onchange="toggleTheme()"> 🌙
+    </label>
+
+    <!-- Resume Screen -->
+    <div id="resumeScreen" class="card" style="display:none;">
+        <h3>Resume Saved Game?</h3>
+        <button onclick="resumeGame()">Resume</button>
+        <button onclick="newGame()">New Game</button>
+    </div>
+
+    <div id="startScreen" class="card">
+        <h3>Enter Number of Players</h3>
+        <input type="number" id="playerCount" min="2">
+        <br>
+        <button onclick="setupNames()">Start Game</button>
+    </div>
+
+    <div id="nameScreen" class="card" style="display:none;">
+        <h3>Enter Player Names</h3>
+        <div id="nameInputs"></div>
+        <button onclick="startGame()">Begin</button>
+    </div>
+
+    <div id="gameScreen" style="display:none;"></div>
+
+    <script>
+
+        let players = []
+        let rounds = 0
+
+        const suits = [
+            { symbol: "♠️", class: "black" },
+            { symbol: "♥️", class: "red" },
+            { symbol: "♣️", class: "black" },
+            { symbol: "♦️", class: "red" }
+        ]
+
+        /* THEME */
+        function toggleTheme() {
+            document.body.classList.toggle("light")
+            localStorage.setItem("theme", document.body.classList.contains("light"))
+        }
+
+        if (localStorage.getItem("theme") === "true") {
+            document.body.classList.add("light")
+        }
+
+        /* RESUME CHECK */
+        window.onload = function () {
+            const saved = localStorage.getItem("judgementGame")
+            if (saved) {
+                document.getElementById("startScreen").style.display = "none"
+                document.getElementById("resumeScreen").style.display = "block"
+            }
+        }
+
+        /* SETUP NAMES */
+        function setupNames() {
+            const count = parseInt(document.getElementById("playerCount").value)
+            if (!count || count < 2) return alert("Minimum 2 players required")
+
+            document.getElementById("startScreen").style.display = "none"
+            document.getElementById("nameScreen").style.display = "block"
+
+            const container = document.getElementById("nameInputs")
+            container.innerHTML = ""
+            for (let i = 0; i < count; i++) {
+                container.innerHTML += `<input type="text" id="p${i}" placeholder="Player ${i + 1}"><br>`
+            }
+        }
+
+        /* START GAME */
+        function startGame() {
+            players = []
+            const count = document.getElementById("nameInputs").children.length / 2
+            for (let i = 0; i < count; i++) {
+                players.push(document.getElementById(`p${i}`).value || `Player ${i + 1}`)
+            }
+            rounds = Math.floor(52 / players.length)
+
+            document.getElementById("nameScreen").style.display = "none"
+            document.getElementById("gameScreen").style.display = "block"
+
+            generateRounds()
+            saveGameState()
+        }
+
+        /* GENERATE ROUNDS */
+        function generateRounds() {
+            const container = document.getElementById("gameScreen")
+            container.innerHTML = ""
+
+            for (let i = 0; i < rounds; i++) {
+                const roundNum = rounds - i
+
+                let card = `<div class="round-card" id="round${i}" ${i !== 0 ? 'style="opacity:0.4"' : ''}>
+<h3>Round ${roundNum} <span class="suit">${suits[i % 4].symbol}</span></h3>`
+
+                players.forEach(p => {
+                    card += `
+<div class="player-block">
+<strong>${p}</strong><br>
+<input type="number" id="input-${i}-${p}" ${i !== 0 ? 'disabled' : ''} onchange="saveGameState()">
+<div class="outcome" id="outcome-${i}-${p}">
+<label><input type="radio" name="res-${i}-${p}" value="won" onchange="handleOutcome(${i})"> ✔ Won</label>
+<label><input type="radio" name="res-${i}-${p}" value="loss" onchange="handleOutcome(${i})"> ❌ Loss</label>
+</div>
+</div>`
+                })
+
+                card += `<button id="lock-${i}" onclick="lockRound(${i})" ${i !== 0 ? 'disabled' : ''}>Lock Round</button>
+</div>`
+
+                container.innerHTML += card
+            }
+        }
+
+        /* LOCK ROUND */
+        function lockRound(i) {
+            for (let p of players) {
+                if (document.getElementById(`input-${i}-${p}`).value === "")
+                    return alert("Fill all values")
+            }
+
+            players.forEach(p => {
+                document.getElementById(`input-${i}-${p}`).disabled = true
+                document.getElementById(`outcome-${i}-${p}`).style.display = "block"
+            })
+
+            document.getElementById(`lock-${i}`).disabled = true
+            saveGameState()
+        }
+
+        /* HANDLE OUTCOME */
+        function handleOutcome(i) {
+            for (let p of players) {
+                const radios = document.getElementsByName(`res-${i}-${p}`)
+                let selected = false
+                for (let r of radios) if (r.checked) selected = true
+                if (!selected) return
+            }
+
+            if (i + 1 >= rounds) {
+                addFinishButton()
+            } else {
+                const next = document.getElementById(`round${i + 1}`)
+                next.style.opacity = "1"
+                players.forEach(p => {
+                    document.getElementById(`input-${i + 1}-${p}`).disabled = false
+                })
+                document.getElementById(`lock-${i + 1}`).disabled = false
+            }
+
+            saveGameState()
+        }
+
+        /* FINISH BUTTON */
+        function addFinishButton() {
+            if (document.getElementById("finishBtn")) return
+            const btn = document.createElement("button")
+            btn.id = "finishBtn"
+            btn.innerText = "Finish Game"
+            btn.onclick = finishGame
+            document.getElementById("gameScreen").appendChild(btn)
+        }
+
+        /* CALCULATE & SHOW LEADERBOARD */
+        function finishGame() {
+            let totals = {}
+            players.forEach(p => totals[p] = 0)
+
+            for (let i = 0; i < rounds; i++) {
+                for (let p of players) {
+                    const val = parseInt(document.getElementById(`input-${i}-${p}`).value)
+                    const radios = document.getElementsByName(`res-${i}-${p}`)
+                    let won = false
+                    for (let r of radios) if (r.checked && r.value === "won") won = true
+                    if (won) totals[p] += val + 10
+                }
+            }
+
+            localStorage.removeItem("judgementGame")
+            showLeaderboard(totals)
+        }
+
+        /* SHOW LEADERBOARD */
+        function showLeaderboard(totals) {
+            let sorted = Object.entries(totals).sort((a, b) => b[1] - a[1])
+
+            const popup = document.createElement("div")
+            popup.className = "leaderboard-popup"
+
+            let content = `<div class="leaderboard-card" id="leaderboardCard"><h2>🏆 Leaderboard 🏆</h2>`
+
+            sorted.forEach((item, index) => {
+                let medal = ""
+                if (index === 0) medal = "🥇"
+                else if (index === 1) medal = "🥈"
+                else if (index === 2) medal = "🥉"
+                content += `<div class="medal">${medal} ${item[0]} - ${item[1]}</div>`
+            })
+
+            content += `
+<button onclick="downloadLeaderboard()">Download</button>
+<button onclick="location.reload()">New Game</button>
+</div>`
+
+            popup.innerHTML = content
+            document.body.appendChild(popup)
+
+            confetti({ particleCount: 200, spread: 100 })
+        }
+
+        /* DOWNLOAD LEADERBOARD */
+        function downloadLeaderboard() {
+            html2canvas(document.getElementById("leaderboardCard")).then(canvas => {
+                const link = document.createElement("a")
+                link.download = "Judgement-Leaderboard.png"
+                link.href = canvas.toDataURL()
+                link.click()
+            })
+        }
+
+        /* SAVE GAME STATE */
+        function saveGameState() {
+            const state = {
+                players,
+                rounds,
+                data: {}
+            }
+
+            for (let i = 0; i < rounds; i++) {
+                state.data[i] = {}
+                for (let p of players) {
+                    state.data[i][p] = {
+                        value: document.getElementById(`input-${i}-${p}`)?.value || "",
+                        result: getSelectedResult(i, p)
+                    }
+                }
+            }
+
+            localStorage.setItem("judgementGame", JSON.stringify(state))
+        }
+
+        /* GET SELECTED RESULT */
+        function getSelectedResult(i, p) {
+            const radios = document.getElementsByName(`res-${i}-${p}`)
+            for (let r of radios) {
+                if (r.checked) return r.value
+            }
+            return null
+        }
+
+        /* RESUME GAME */
+        function resumeGame() {
+            const saved = JSON.parse(localStorage.getItem("judgementGame"))
+            players = saved.players
+            rounds = saved.rounds
+
+            document.getElementById("resumeScreen").style.display = "none"
+            document.getElementById("gameScreen").style.display = "block"
+
+            generateRounds()
+
+            for (let i = 0; i < rounds; i++) {
+                for (let p of players) {
+                    const entry = saved.data[i][p]
+                    if (entry.value) {
+                        document.getElementById(`input-${i}-${p}`).value = entry.value
+                        document.getElementById(`input-${i}-${p}`).disabled = true
+                        document.getElementById(`outcome-${i}-${p}`).style.display = "block"
+                    }
+                    if (entry.result) {
+                        const radios = document.getElementsByName(`res-${i}-${p}`)
+                        for (let r of radios) {
+                            if (r.value === entry.result) r.checked = true
+                        }
+                    }
+                }
+            }
+        }
+
+        /* NEW GAME */
+        function newGame() {
+            localStorage.removeItem("judgementGame")
+            location.reload()
+        }
+
+    </script>
+</body>
+
+</html>
