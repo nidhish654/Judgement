@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Judgement</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: #111;
+            color: white;
+            overflow-x: auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: #1c1c1c;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px auto;
+            width: 85%;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            margin: 6px 0;
+            font-size: 13px;
+            width: 24%;
+            background: #333;
+            color: white;
+        }
+
+        button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            margin-top: 8px;
+            background: #c0392b;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .table-wrapper {
+            margin: 20px auto;
+            width: 95%;
+            max-width: 1000px;
+            overflow-x: visible;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: auto;
+            table-layout: fixed;
+            width: auto;
+            font-size: 12px;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            background: #222;
+            z-index: 10;
+        }
+
+        thead th {
+            background: #222;
+        }
+
+        th,
+        td {
+            padding: 4px;
+            border: 1px solid #444;
+            text-align: center;
+            width: 38px;
+        }
+
+        td input[type="number"] {
+            width: 16px;
+            padding: 2px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .suit {
+            font-size: 12px;
+            margin-left: 3px;
+        }
+
+        .total {
+            font-size: 10px;
+            margin-top: 2px;
+            display: block;
+        }
+
+        .outcome {
+            margin-top: 2px;
+            display: none;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .outcome input {
+            display: none;
+        }
+
+        .outcome label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .outcome input[value="won"]:checked+span {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        .outcome input[value="loss"]:checked+span {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .server-header {
+            background: linear-gradient(45deg, #6a5acd, #4169e1);
+            color: white !important;
+            border-radius: 6px;
+        }
+
+        .leaderboard-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .leaderboard-card {
+            background: #1c1c1c;
+            padding: 25px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 350px;
+            text-align: center;
+        }
+
+        .medal {
+            margin: 8px 0;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="resumeScreen" class="card" style="display:none;">
+        <h3>Resume Saved Game?</h3>
+        <button onclick="resumeGame()">Resume</button>
+        <button onclick="newGame()">New Game</button>
+    </div>
+
+    <div id="startScreen" class="card">
+        <h3>Enter Number of Players</h3>
+        <input type="number" id="playerCount" min="2">
+        <br>
+        <button onclick="setupNames()">Start Game</button>
+    </div>
+
+    <div id="nameScreen" class="card" style="display:none;">
+        <h3>Enter Player Names</h3>
+        <div id="nameInputs"></div>
+        <button onclick="startGame()">Begin</button>
+    </div>
+
+    <div id="modeScreen" class="card" style="display:none;">
+        <h3>Select Game Mode</h3>
+        <button onclick="startClassic()" style="display:block;width:80%;margin:8px auto;padding:12px;font-size:14px;">Classic Game</button>
+        <button onclick="start13Round()" style="display:block;width:80%;margin:8px auto;padding:12px;font-size:14px;">13 Round Game</button>
+        <button onclick="showCustomSetup()" style="display:block;width:80%;margin:8px auto;padding:12px;font-size:14px;">Custom Game</button>
+        <div id="customSetup" style="display:none;margin-top:16px;">
+            <label style="font-size:13px;">Starting Round (counts down to 1):</label><br>
+            <input type="number" id="customRounds" min="1" max="13" style="width:60px;margin:8px 0;"><br>
+            <button onclick="startCustom()">Start Custom Game</button>
+        </div>
+    </div>
+
+    <div class="table-wrapper" style="display:none;" id="tableSection">
+        <table id="scoreTable"></table>
+    </div>
+
+    <script>
+
+        let players = []
+        let rounds = 0
+        let runningTotals = {}
+        let currentServerIndex = 0
+        let gameFinished = false
+        let gameMode = "classic"
+        let startingRound = 0
+        const suits = ["♠️", "♥️", "♣️", "♦️"]
+
+        /* -------------------- RESUME SYSTEM -------------------- */
+
+        window.onload = function () {
+            const saved = localStorage.getItem("judgementGame")
+            if (saved) {
+                document.getElementById("startScreen").style.display = "none"
+                document.getElementById("resumeScreen").style.display = "block"
+            }
+        }
+
+        function saveGameState() {
+            const state = {
+                players,
+                rounds,
+                gameMode,
+                startingRound,
+                currentServerIndex,
+                gameFinished,
+                rows: {},
+                data: {}
+            }
+
+            for (let i = 0; i < rounds; i++) {
+                const rowEl = document.getElementById(`row${i}`)
+                const started = i === 0 || rowEl?.style.opacity === "1"
+                const inputEl = document.getElementById(`input-${i}-${players[0]}`)
+                const locked = inputEl?.disabled || false
+                const startBtn = document.getElementById(`start-${i}`)
+                const startEnabled = startBtn ? !startBtn.disabled : false
+                state.rows[i] = { started, locked, startEnabled }
+                state.data[i] = {}
+                for (let p of players) {
+                    state.data[i][p] = {
+                        value: document.getElementById(`input-${i}-${p}`)?.value || "",
+                        result: getSelectedResult(i, p)
+                    }
+                }
+            }
+
+            localStorage.setItem("judgementGame", JSON.stringify(state))
+        }
+
+        function resumeGame() {
+            const saved = JSON.parse(localStorage.getItem("judgementGame"))
+
+            players = saved.players
+            rounds = saved.rounds
+            gameMode = saved.gameMode || "classic"
+            startingRound = saved.startingRound || rounds
+            currentServerIndex = saved.currentServerIndex
+            gameFinished = saved.gameFinished
+
+            document.getElementById("resumeScreen").style.display = "none"
+            document.getElementById("tableSection").style.display = "block"
+
+            generateTable()
+
+            for (let i = 0; i < rounds; i++) {
+                const rowMeta = saved.rows?.[i] || {}
+                // Restore active row
+                if (rowMeta.started && i !== 0) {
+                    document.getElementById(`row${i}`).style.opacity = "1"
+                    for (let p of players) {
+                        document.getElementById(`input-${i}-${p}`).disabled = false
+                        document.getElementById(`outcome-${i}-${p}`).style.display = "flex"
+                    }
+                }
+                // Restore locked state
+                if (rowMeta.locked) {
+                    for (let p of players) {
+                        document.getElementById(`input-${i}-${p}`).disabled = true
+                        const radios = document.getElementsByName(`res-${i}-${p}`)
+                        for (let r of radios) r.disabled = true
+                    }
+                }
+                // Restore Start Round button state
+                if (rowMeta.startEnabled) {
+                    const btn = document.getElementById(`start-${i}`)
+                    if (btn) btn.disabled = false
+                }
+                // Restore values and results
+                for (let p of players) {
+                    const entry = saved.data[i]?.[p]
+                    if (!entry) continue
+                    if (entry.value !== "") document.getElementById(`input-${i}-${p}`).value = entry.value
+                    if (entry.result) {
+                        const radios = document.getElementsByName(`res-${i}-${p}`)
+                        for (let r of radios) if (r.value === entry.result) r.checked = true
+                    }
+                }
+            }
+
+            updateHeaderHighlight()
+            updateRunningTotals()
+            if (gameFinished) addFinishButton(true)
+        }
+
+        function newGame() {
+            localStorage.removeItem("judgementGame")
+            location.reload()
+        }
+
+        /* -------------------- GAME -------------------- */
+
+        function getSelectedResult(i, p) {
+            const radios = document.getElementsByName(`res-${i}-${p}`)
+            for (let r of radios) { if (r.checked) return r.value }
+            return null
+        }
+
+        function setupNames() {
+            const count = parseInt(document.getElementById("playerCount").value)
+            if (!count || count < 2) return alert("Minimum 2 players required")
+            document.getElementById("startScreen").style.display = "none"
+            document.getElementById("nameScreen").style.display = "block"
+            const container = document.getElementById("nameInputs")
+            container.innerHTML = ""
+            for (let i = 0; i < count; i++) {
+                container.innerHTML += `<input type="text" id="p${i}" placeholder="Player ${i + 1}"><br>`
+            }
+        }
+
+        function startGame() {
+            players = []
+            const count = document.getElementById("nameInputs").children.length / 2
+            for (let i = 0; i < count; i++) {
+                players.push(document.getElementById(`p${i}`).value || `Player ${i + 1}`)
+            }
+            document.getElementById("nameScreen").style.display = "none"
+            document.getElementById("modeScreen").style.display = "block"
+        }
+
+        function startClassic() {
+            gameMode = "classic"
+            rounds = Math.floor(52 / players.length)
+            startingRound = rounds
+            launchGame()
+        }
+
+        function start13Round() {
+            gameMode = "13round"
+            rounds = Math.floor(52 / players.length)
+            startingRound = 13
+            launchGame()
+        }
+
+        function showCustomSetup() {
+            document.getElementById("customSetup").style.display = "block"
+        }
+
+        function startCustom() {
+            const r = parseInt(document.getElementById("customRounds").value)
+            if (!r || r < 1) return alert("Enter a valid starting round number.")
+            gameMode = "custom"
+            startingRound = r
+            rounds = r
+            launchGame()
+        }
+
+        function launchGame() {
+            currentServerIndex = players.length - 1
+            gameFinished = false
+
+            document.getElementById("modeScreen").style.display = "none"
+            document.getElementById("tableSection").style.display = "block"
+
+            generateTable()
+            updateRunningTotals()
+            saveGameState()
+        }
+
+        function getRoundNum(i) {
+            if (gameMode === "13round") return 13
+            return rounds - i
+        }
+
+        function updateHeaderHighlight() {
+            players.forEach((p, index) => {
+                const header = document.getElementById(`header-${index}`)
+                header.classList.remove("server-header")
+                if (index === currentServerIndex) {
+                    header.classList.add("server-header")
+                }
+            })
+        }
+
+        function generateTable() {
+            const table = document.getElementById("scoreTable")
+            table.innerHTML = ""
+
+            let header = "<thead><tr><th>Round</th>"
+            players.forEach((p, index) => {
+                header += `<th id="header-${index}">${p}<div class="total" id="total-${p}">0</div></th>`
+            })
+            header += "<th>Action</th></tr></thead><tbody>"
+            table.innerHTML += header
+            updateHeaderHighlight()
+
+            for (let i = 0; i < rounds; i++) {
+                const roundNum = getRoundNum(i)
+                const isFirst = i === 0
+                const isLast = i === rounds - 1
+                let row = `<tr id="row${i}" ${!isFirst ? 'style="opacity:0.4"' : ''}><td>${roundNum}<span class="suit">${suits[i % 4]}</span></td>`
+
+                players.forEach(p => {
+                    row += `<td>
+<input type="number" id="input-${i}-${p}" ${!isFirst ? 'disabled' : ''} onchange="saveGameState()">
+<div class="outcome" id="outcome-${i}-${p}" ${isFirst ? 'style="display:flex"' : ''}>
+<label><input type="radio" name="res-${i}-${p}" value="won" onchange="handleOutcome(${i})"><span>✔</span></label>
+<label><input type="radio" name="res-${i}-${p}" value="loss" onchange="handleOutcome(${i})"><span>✘</span></label>
+</div>
+</td>`
+                })
+
+                row += `<td>${isLast ? '' : `<button id="start-${i}" onclick="startRound(${i})" disabled>Lock</button>`}</td></tr>`
+                table.innerHTML += row
+            }
+            table.innerHTML += "</tbody>"
+        }
+
+        function startRound(i) {
+            if (gameFinished) return
+            // Lock this round's inputs and radios
+            for (let p of players) {
+                document.getElementById(`input-${i}-${p}`).disabled = true
+                const radios = document.getElementsByName(`res-${i}-${p}`)
+                for (let r of radios) r.disabled = true
+            }
+            document.getElementById(`start-${i}`).disabled = true
+            // Activate next row
+            if (i + 1 < rounds) {
+                currentServerIndex = (currentServerIndex + 1) % players.length
+                updateHeaderHighlight()
+                const rowEl = document.getElementById(`row${i + 1}`)
+                rowEl.style.opacity = "1"
+                for (let p of players) {
+                    document.getElementById(`input-${i + 1}-${p}`).disabled = false
+                    document.getElementById(`outcome-${i + 1}-${p}`).style.display = "flex"
+                }
+            }
+            saveGameState()
+        }
+
+        function handleOutcome(i) {
+            if (gameFinished) return
+
+            for (let p of players) {
+                if (!getSelectedResult(i, p)) return
+            }
+
+            updateRunningTotals()
+
+            if (i + 1 < rounds) {
+                const btn = document.getElementById(`start-${i}`)
+                if (btn) btn.disabled = false
+            }
+
+            if (i + 1 === rounds) addFinishButton()
+
+            saveGameState()
+        }
+
+        function updateRunningTotals() {
+            players.forEach(p => runningTotals[p] = 0)
+            for (let i = 0; i < rounds; i++) {
+                for (let p of players) {
+                    const val = parseInt(document.getElementById(`input-${i}-${p}`)?.value)
+                    if (getSelectedResult(i, p) === "won" && !isNaN(val)) {
+                        runningTotals[p] += val + 10
+                    }
+                }
+            }
+            players.forEach(p => {
+                const el = document.getElementById(`total-${p}`)
+                if (el) el.innerText = runningTotals[p]
+            })
+        }
+
+        function toggleTotals() {
+            const show = document.getElementById("showTotals").checked
+            updateRunningTotals()
+            document.querySelectorAll(".total").forEach(el => {
+                el.style.display = show ? "block" : "none"
+            })
+        }
+
+        function addFinishButton(restored = false) {
+            if (document.getElementById("finishBtn")) return
+            const btn = document.createElement("button")
+            btn.id = "finishBtn"
+            btn.innerText = "Finish Game"
+            btn.onclick = finishGame
+            document.body.appendChild(btn)
+            if (restored && gameFinished) btn.style.display = "none"
+        }
+
+        function finishGame() {
+            gameFinished = true
+            players.forEach(p => {
+                for (let i = 0; i < rounds; i++) {
+                    document.getElementById(`input-${i}-${p}`).disabled = true
+                    const radios = document.getElementsByName(`res-${i}-${p}`)
+                    for (let r of radios) r.disabled = true
+                }
+            })
+            updateRunningTotals()
+            showLeaderboard()
+            saveGameState()
+        }
+
+        function showLeaderboard() {
+            let sorted = Object.entries(runningTotals).sort((a, b) => b[1] - a[1])
+            let today = new Date().toLocaleDateString()
+
+            const popup = document.createElement("div")
+            popup.className = "leaderboard-popup"
+
+            let content = `<div class="leaderboard-card" id="leaderboardCard">
+<h2>🏆 Leaderboard 🏆</h2>
+<p>${today}</p>`
+
+            sorted.forEach((item, index) => {
+                let medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : ""
+                content += `<div class="medal">${medal} ${item[0]} - ${item[1]}</div>`
+            })
+
+            content += `<button onclick="downloadLeaderboard()">Download</button>
+<button onclick="closeLeaderboard()">Back to Table</button></div>`
+
+            popup.innerHTML = content
+            document.body.appendChild(popup)
+            confetti({ particleCount: 200, spread: 100 })
+        }
+
+        function closeLeaderboard() {
+            document.querySelector(".leaderboard-popup").remove()
+        }
+
+        function downloadLeaderboard() {
+            html2canvas(document.getElementById("leaderboardCard")).then(canvas => {
+                const link = document.createElement("a")
+                link.download = "Judgement-Leaderboard.png"
+                link.href = canvas.toDataURL()
+                link.click()
+            })
+        }
+
+    </script>
+</body>
+
+</html>
